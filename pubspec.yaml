@@ -1,0 +1,12 @@
+name: psync
+version: 1.0.0
+description: psync
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies: 
+  libpq_dart: #^1.2.0
+    path: ../libpq_dart
+
