@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."knowledge"."id" IS 'teste 2';

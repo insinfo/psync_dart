@@ -1,0 +1,1 @@
+ALTER TABLE "public"."knowledge"  DROP CONSTRAINT "knowledge_pkey"

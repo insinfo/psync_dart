@@ -51,30 +51,76 @@ List<Map<String, dynamic>> getAllTables(LibPq db) {
 List<Map<String, dynamic>> getTableFields(LibPq conn, String table,
     {String schemaName = 'public'}) {
   final sql = '''
-SELECT col.table_schema AS schema_name, col.table_name, col.column_name, col.character_maximum_length, col.is_nullable,
- col.numeric_precision, col.numeric_scale, col.datetime_precision, col.ordinal_position, b.atttypmod, b.attndims, 
- col.data_type AS col_type, et.typelem, et.typlen, et.typtype, nbt.nspname AS elem_schema, bt.typname AS elem_name,
-  b.atttypid, col.udt_schema, col.udt_name, col.domain_catalog, col.domain_schema, col.domain_name, 
-  col_description(c.oid, col.ordinal_position) AS comment, 
-  col.column_default AS col_default, col.is_identity, col.identity_generation, 
-  col.identity_start, col.identity_increment, col.identity_maximum, 
-  col.identity_minimum, seq.seqcache::information_schema.character_data AS identity_cache,
-   col.identity_cycle, col.is_generated, col.generation_expression, b.attacl, colnsp.nspname AS collation_schema_name, 
-   coll.collname, c.relkind, b.attfdwoptions AS foreign_options 
-   FROM information_schema.columns AS col 
-   LEFT JOIN pg_namespace ns ON ns.nspname = col.table_schema 
-   LEFT JOIN pg_class c ON col.table_name = c.relname AND c.relnamespace = ns.oid 
-   LEFT JOIN pg_attrdef a ON c.oid = a.adrelid AND col.ordinal_position = a.adnum 
-   LEFT JOIN pg_attribute b ON b.attrelid = c.oid AND b.attname = col.column_name 
-   LEFT JOIN pg_type et ON et.oid = b.atttypid 
-   LEFT JOIN pg_collation coll ON coll.oid = b.attcollation 
-   LEFT JOIN pg_namespace colnsp ON coll.collnamespace = colnsp.oid 
-   LEFT JOIN 
-   (pg_depend dep JOIN pg_sequence seq ON dep.classid = 'pg_class'::regclass::oid AND dep.objid = seq.seqrelid AND dep.deptype = 'i'::"char") 
-   ON dep.refclassid = 'pg_class'::regclass::oid AND dep.refobjid = c.oid AND dep.refobjsubid = b.attnum    
-   LEFT JOIN pg_type bt ON et.typelem = bt.oid LEFT JOIN pg_namespace nbt ON bt.typnamespace = nbt.oid
-   WHERE col.table_schema = '$schemaName' AND col.table_name = '$table' 
-   ORDER BY col.table_schema, col.table_name, col.ordinal_position
+SELECT
+	col.table_schema AS table_schema,
+	col.table_name,
+	col.column_name,
+	col.character_maximum_length,
+	col.is_nullable,
+	col.numeric_precision,
+	col.numeric_scale,
+	col.datetime_precision,
+	col.ordinal_position,
+	b.atttypmod,
+	b.attndims,
+	col.data_type AS col_type,
+	et.typelem,
+	et.typlen,
+	et.typtype,
+	nbt.nspname AS elem_schema,
+	bt.typname AS elem_name,
+	b.atttypid,
+	col.udt_schema,
+	col.udt_name,
+	col.domain_catalog,
+	col.domain_schema,
+	col.domain_name,
+	col_description ( C.OID, col.ordinal_position ) AS comment,
+	col.column_default AS col_default,
+	col.is_identity,
+	col.identity_generation,
+	col.identity_start,
+	col.identity_increment,
+	col.identity_maximum,
+	col.identity_minimum,
+	seq.seqcache::information_schema.character_data AS identity_cache,
+	col.identity_cycle,
+	col.is_generated,
+	col.generation_expression,
+	b.attacl,
+	colnsp.nspname AS collation_schema_name,
+	coll.collname,
+	C.relkind,
+	b.attfdwoptions AS foreign_options 
+FROM
+	information_schema.COLUMNS AS col
+	LEFT JOIN pg_namespace ns ON ns.nspname = col.table_schema
+	LEFT JOIN pg_class C ON col.TABLE_NAME = C.relname 
+	AND C.relnamespace = ns.
+	OID LEFT JOIN pg_attrdef A ON C.OID = A.adrelid 
+	AND col.ordinal_position = A.adnum
+	LEFT JOIN pg_attribute b ON b.attrelid = C.OID 
+	AND b.attname = col.
+	COLUMN_NAME LEFT JOIN pg_type et ON et.OID = b.atttypid
+	LEFT JOIN pg_collation coll ON coll.OID = b.attcollation
+	LEFT JOIN pg_namespace colnsp ON coll.collnamespace = colnsp.
+	OID LEFT JOIN (
+		pg_depend dep
+		JOIN pg_sequence seq ON dep.classid = 'pg_class' :: REGCLASS :: OID 
+		AND dep.objid = seq.seqrelid 
+		AND dep.deptype = 'i' :: "char" 
+	) ON dep.refclassid = 'pg_class' :: REGCLASS :: OID 
+	AND dep.refobjid = C.OID 
+	AND dep.refobjsubid = b.attnum
+	LEFT JOIN pg_type bt ON et.typelem = bt.
+	OID LEFT JOIN pg_namespace nbt ON bt.typnamespace = nbt.OID 
+WHERE
+	col.table_schema = '$schemaName' 
+	AND col.TABLE_NAME = '$table' 
+ORDER BY
+	col.table_schema,
+	col.TABLE_NAME,
+	col.ordinal_position
  ''';
   final result = conn.exec(sql);
   return result.asMapList();
@@ -130,6 +176,71 @@ List<Map<String, dynamic>> getAllOperatorName(LibPq conn) {
 List<Map<String, dynamic>> getAllOperator(LibPq conn) {
   final sql = '''
  SELECT opr.oid, opr.oprname, nsp.nspname FROM pg_operator opr, pg_namespace nsp WHERE opr.oprnamespace = nsp.oid
+ ''';
+  final result = conn.exec(sql);
+  return result.asMapList();
+}
+
+void addColComment(LibPq conn, String comment, String col, String table,
+    {String schemaName = 'public'}) {
+  final sql = '''COMMENT ON COLUMN "$schemaName"."$table"."$col" IS \$1;''';
+  conn.execParams(sql, [comment]);
+}
+
+/// [col] column name
+void addPrimaryKey(LibPq conn, String col, String table,
+    {String schemaName = 'public'}) {
+  final sql = '''ALTER TABLE "$schemaName"."$table" ADD PRIMARY KEY (\$1)''';
+  conn.execParams(sql, [col]);
+}
+
+/// [col] column name
+void removePrimaryKey(LibPq conn, String col, String table,
+    {String schemaName = 'public'}) {
+  //knowledge_pkey
+  final pkey = '${col}_pkey';
+  final sql = '''ALTER TABLE "$schemaName"."$table" DROP CONSTRAINT \$1''';
+  conn.execParams(sql, [pkey]);
+}
+
+void addColSerial(LibPq conn, String col, String table,
+    {String schemaName = 'public'}) {
+  final sql = '''ALTER TABLE "$schemaName"."$table" ADD COLUMN "$col" serial''';
+  conn.execParams(sql, [col]);
+}
+
+void removeCol(LibPq conn, String col, String table,
+    {String schemaName = 'public'}) {
+  final sql = '''ALTER TABLE "$schemaName"."$table" DROP COLUMN "$col"''';
+  conn.execParams(sql, [col]);
+}
+
+List<Map<String, dynamic>> getAllSequence(LibPq conn) {
+  final sql = '''
+ SELECT 
+cl.oid AS oid, 
+ns.nspname AS schema_name, 
+cl.relname AS sequence_name, 
+dep.deptype AS deptype, 
+seq.seqstart AS start_value, 
+seq.seqincrement AS increment_by, 
+seq.seqmin AS min_value, 
+seq.seqmax AS max_value, 
+seq.seqcache AS cache_value, 
+seq.seqcycle AS is_cycled, 
+pg_get_userbyid(cl.relowner) AS seqowner, 
+cl.relacl AS acl, des.description AS comment, 
+cl2.relname AS own_table, 
+att.attname AS own_column 
+FROM pg_class cl 
+LEFT JOIN pg_namespace ns ON ns.oid = relnamespace 
+LEFT JOIN pg_description des ON des.objoid = cl.oid 
+LEFT JOIN pg_depend dep ON dep.objid = cl.oid 
+LEFT JOIN pg_class cl2 ON cl2.oid = dep.refobjid 
+LEFT JOIN pg_attribute att ON att.attrelid = dep.refobjid AND att.attnum = dep.refobjsubid 
+LEFT JOIN pg_sequence seq ON seq.seqrelid = cl.oid 
+WHERE cl.relkind = 'S' AND ns.nspname = 'public' 
+ORDER BY cl.relname, dep.deptype DESC
  ''';
   final result = conn.exec(sql);
   return result.asMapList();

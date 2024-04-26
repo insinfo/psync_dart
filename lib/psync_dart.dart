@@ -1,4 +1,4 @@
 library psync;
 
-//export 'src/src/extensions/extensions.dart';
+export 'src/psync.dart';
 

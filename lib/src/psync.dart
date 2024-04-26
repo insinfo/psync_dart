@@ -14,7 +14,9 @@ class PSync implements IDisposable {
   List<String> dstTables = [];
 
   bool _delete = false;
-  SyncMode _mode = SyncMode.Incremental;
+
+  /// The synchronization mode
+  SyncMode mode = SyncMode.Incremental;
 
   /// Should tables on destination deleted that are not existing on source
   bool get delete {
@@ -22,20 +24,23 @@ class PSync implements IDisposable {
   }
 
   /// The synchronization mode
-  SyncMode get mode {
-    return _mode;
-  }
+  // SyncMode get mode {
+  //   return _mode;
+  // }
 
   /// [src] The configuration string for the source database
   /// [dst] The configuration string for the destination database
-  PSync(this.src, this.dst);
+  PSync(this.src, this.dst, {this.mode = SyncMode.Complete});
 
   /// Start synchronization
   void start() {
     srcTables = listAllTables(src);
     dstTables = listAllTables(dst);
 
-    if (srcTables.isEmpty || dstTables.isEmpty) return;
+    if (srcTables.isEmpty) {
+      print("Source has 0 tables exiting...");
+      return;
+    }
 
     print("Source has #${srcTables.length} tables...");
     print("Destination has #${dstTables.length} tables...");
@@ -46,17 +51,21 @@ class PSync implements IDisposable {
       case SyncMode.Complete:
         {
           for (String table in srcTables) {
-            if (!dstTables.contains(table)) createTable(table);
-            syncContent(table);
+            if (!dstTables.contains(table)) {
+              createTable(table);
+            }
+            //syncContent(table);
           }
         }
         break;
       case SyncMode.Incremental:
         {
           for (String table in srcTables) {
-            if (dstTables.contains(table)) continue;
-            createTable(table);
-            syncContent(table);
+            if (dstTables.contains(table)) {
+              continue;
+            }
+            // createTable(table);
+            // syncContent(table);
           }
         }
         break;
@@ -134,27 +143,30 @@ class PSync implements IDisposable {
   /// Creates a table on destination
   /// [table] Table to be created
   void createTable(String table) {
-    print("Creating table $table...");
+    print('Creating table "$table"...');
     late PqResult result;
     try {
       final pkeys = getPrimaryKeys(table, src);
       result = src.exec(
-          "select column_name, is_nullable, data_type from information_schema.columns where table_name = '$table' order by ordinal_position");
-      var command = "create table $table(";
+          "select column_name, is_nullable, data_type, column_default from information_schema.columns where table_name = '$table' order by ordinal_position");
+
+      var command = 'create table "$table"(';
       for (int row = 0; row < result.rows; row++) {
-        final name = result.getValueByColNameAsString(row, "column_name");
-        final type = result.getValueByColNameAsString(row, "data_type");
+        final name = result.getValueByColNameAsString(row, 'column_name');
+        final type = result.getValueByColNameAsString(row, 'data_type');
+        final columnDefault = result.getValueByColNameAsString(row, 'column_default');
+        print('columnDefault $columnDefault');
         var options =
-            (result.getValueByColNameAsString(row, "is_nullable") == "YES"
-                ? ""
-                : "not null");
+            (result.getValueByColNameAsString(row, 'is_nullable') == 'YES'
+                ? ''
+                : 'not null');
 
         if (pkeys.contains(name)) options += " primary key";
 
         final comma = (row + 1 < result.rows ? "," : "");
         command += "$name $type $options$comma";
       }
-      command += ")";
+      command += ')';
 
       print('createTable command: $command');
 
